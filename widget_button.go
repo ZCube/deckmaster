@@ -76,7 +76,7 @@ func (w *ButtonWidget) SetImage(img image.Image) {
 
 // Update renders the widget.
 func (w *ButtonWidget) Update() error {
-	size := int(w.dev.Pixels)
+	size := int(w.dev.GetPixels())
 	margin := size / 18
 	height := size - (margin * 2)
 	img := image.NewRGBA(image.Rect(0, 0, size, size))
@@ -103,7 +103,7 @@ func (w *ButtonWidget) Update() error {
 			bounds,
 			ttfFont,
 			w.label,
-			w.dev.DPI,
+			w.dev.GetDPI(),
 			w.fontsize,
 			w.color,
 			image.Pt(-1, -1))

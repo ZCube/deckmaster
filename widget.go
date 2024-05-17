@@ -36,7 +36,7 @@ type BaseWidget struct {
 	key        uint8
 	action     *ActionConfig
 	actionHold *ActionConfig
-	dev        *streamdeck.Device
+	dev        streamdeck.DeviceInterface
 	background image.Image
 	lastUpdate time.Time
 	interval   time.Duration
@@ -79,7 +79,7 @@ func (w *BaseWidget) Update() error {
 }
 
 // NewBaseWidget returns a new BaseWidget.
-func NewBaseWidget(dev *streamdeck.Device, base string, index uint8, action, actionHold *ActionConfig, bg image.Image) *BaseWidget {
+func NewBaseWidget(dev streamdeck.DeviceInterface, base string, index uint8, action, actionHold *ActionConfig, bg image.Image) *BaseWidget {
 	return &BaseWidget{
 		base:       base,
 		key:        index,
@@ -91,7 +91,7 @@ func NewBaseWidget(dev *streamdeck.Device, base string, index uint8, action, act
 }
 
 // NewWidget initializes a widget.
-func NewWidget(dev *streamdeck.Device, base string, kc KeyConfig, bg image.Image) (Widget, error) {
+func NewWidget(dev streamdeck.DeviceInterface, base string, kc KeyConfig, bg image.Image) (Widget, error) {
 	bw := NewBaseWidget(dev, base, kc.Index, kc.Action, kc.ActionHold, bg)
 
 	switch kc.Widget.ID {
@@ -113,8 +113,8 @@ func NewWidget(dev *streamdeck.Device, base string, kc KeyConfig, bg image.Image
 	case "time":
 		return NewTimeWidget(bw, kc.Widget), nil
 
-	case "recentWindow":
-		return NewRecentWindowWidget(bw, kc.Widget)
+	// case "recentWindow":
+	// 	return NewRecentWindowWidget(bw, kc.Widget)
 
 	case "top":
 		return NewTopWidget(bw, kc.Widget), nil
@@ -131,10 +131,10 @@ func NewWidget(dev *streamdeck.Device, base string, kc KeyConfig, bg image.Image
 }
 
 // renders the widget including its background image.
-func (w *BaseWidget) render(dev *streamdeck.Device, fg image.Image) error {
+func (w *BaseWidget) render(dev streamdeck.DeviceInterface, fg image.Image) error {
 	w.lastUpdate = time.Now()
 
-	pixels := int(dev.Pixels)
+	pixels := int(dev.GetPixels())
 	img := image.NewRGBA(image.Rect(0, 0, pixels, pixels))
 	if w.background != nil {
 		draw.Draw(img, img.Bounds(), w.background, image.Point{}, draw.Over)

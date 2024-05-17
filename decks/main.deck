@@ -35,7 +35,7 @@
       font = "bold;regular;thin"
 
 [[keys]]
-  index = 5
+  index = 6
   [keys.widget]
     id = "button"
     [keys.widget.config]
@@ -48,7 +48,7 @@
     keycode = "Mute"
 
 [[keys]]
-  index = 6
+  index = 7
   [keys.widget]
     id = "button"
     [keys.widget.config]
@@ -61,7 +61,7 @@
     keycode = "Mute"
 
 [[keys]]
-  index = 7
+  index = 8
   [keys.widget]
     id = "button"
     [keys.widget.config]
@@ -70,7 +70,7 @@
     device = "sleep"
 
 [[keys]]
-  index = 8
+  index = 9
   [keys.widget]
     id = "button"
     [keys.widget.config]
@@ -80,7 +80,7 @@
     device = "brightness-10"
 
 [[keys]]
-  index = 9
+  index = 10
   [keys.widget]
     id = "button"
     [keys.widget.config]
@@ -88,43 +88,3 @@
       label = "Brighten"
   [keys.action]
     device = "brightness+10"
-
-[[keys]]
-  index = 10
-  [keys.widget]
-    id = "recentWindow"
-    [keys.widget.config]
-      window = 1
-      showTitle = true
-
-[[keys]]
-  index = 11
-  [keys.widget]
-    id = "recentWindow"
-    [keys.widget.config]
-      window = 2
-      showTitle = true
-
-[[keys]]
-  index = 12
-  [keys.widget]
-    id = "recentWindow"
-    [keys.widget.config]
-      window = 3
-      showTitle = true
-
-[[keys]]
-  index = 13
-  [keys.widget]
-    id = "recentWindow"
-    [keys.widget.config]
-      window = 4
-      showTitle = true
-
-[[keys]]
-  index = 14
-  [keys.widget]
-    id = "recentWindow"
-    [keys.widget.config]
-      window = 5
-      showTitle = true

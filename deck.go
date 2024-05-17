@@ -10,10 +10,13 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
+	_ "image/jpeg" //nolint
+	_ "image/png"  //nolint
+
 	"github.com/atotto/clipboard"
-	"github.com/godbus/dbus"
 	"github.com/muesli/streamdeck"
 )
 
@@ -22,10 +25,11 @@ type Deck struct {
 	File       string
 	Background image.Image
 	Widgets    []Widget
+	Mutex      *sync.Mutex
 }
 
 // LoadDeck loads a deck configuration.
-func LoadDeck(dev *streamdeck.Device, base string, deck string) (*Deck, error) {
+func LoadDeck(dev streamdeck.DeviceInterface, base string, deck string) (*Deck, error) {
 	path, err := expandPath(base, deck)
 	if err != nil {
 		return nil, err
@@ -38,7 +42,8 @@ func LoadDeck(dev *streamdeck.Device, base string, deck string) (*Deck, error) {
 	}
 
 	d := Deck{
-		File: path,
+		File:  path,
+		Mutex: &sync.Mutex{},
 	}
 	if dc.Background != "" {
 		bgpath, err := expandPath(filepath.Dir(path), dc.Background)
@@ -55,7 +60,7 @@ func LoadDeck(dev *streamdeck.Device, base string, deck string) (*Deck, error) {
 		keyMap[k.Index] = k
 	}
 
-	for i := uint8(0); i < dev.Keys; i++ {
+	for i := uint8(0); i < dev.GetKeys(); i++ {
 		bg := d.backgroundForKey(dev, i)
 
 		var w Widget
@@ -75,7 +80,7 @@ func LoadDeck(dev *streamdeck.Device, base string, deck string) (*Deck, error) {
 }
 
 // loads a background image.
-func (d *Deck) loadBackground(dev *streamdeck.Device, bg string) error {
+func (d *Deck) loadBackground(dev streamdeck.DeviceInterface, bg string) error {
 	f, err := os.Open(bg)
 	if err != nil {
 		return err
@@ -87,10 +92,10 @@ func (d *Deck) loadBackground(dev *streamdeck.Device, bg string) error {
 		return err
 	}
 
-	rows := int(dev.Rows)
-	cols := int(dev.Columns)
-	padding := int(dev.Padding)
-	pixels := int(dev.Pixels)
+	rows := int(dev.GetRows())
+	cols := int(dev.GetColumns())
+	padding := int(dev.GetPadding())
+	pixels := int(dev.GetPixels())
 
 	width := cols*pixels + (cols-1)*padding
 	height := rows*pixels + (rows-1)*padding
@@ -104,14 +109,14 @@ func (d *Deck) loadBackground(dev *streamdeck.Device, bg string) error {
 }
 
 // returns the background image for an individual key.
-func (d Deck) backgroundForKey(dev *streamdeck.Device, key uint8) image.Image {
-	padding := int(dev.Padding)
-	pixels := int(dev.Pixels)
+func (d Deck) backgroundForKey(dev streamdeck.DeviceInterface, key uint8) image.Image {
+	padding := int(dev.GetPadding())
+	pixels := int(dev.GetPixels())
 	bg := image.NewRGBA(image.Rect(0, 0, pixels, pixels))
 
 	if d.Background != nil {
-		startx := int(key%dev.Columns) * (pixels + padding)
-		starty := int(key/dev.Columns) * (pixels + padding)
+		startx := int(key%dev.GetColumns()) * (pixels + padding)
+		starty := int(key/dev.GetColumns()) * (pixels + padding)
 		draw.Draw(bg, bg.Bounds(), d.Background, image.Point{startx, starty}, draw.Src)
 	}
 
@@ -146,21 +151,21 @@ func emulateKeyPress(keys string) {
 		return
 	}
 
-	kk := strings.Split(keys, "-")
-	for i, k := range kk {
-		k = formatKeycodes(strings.TrimSpace(k))
-		kc, err := strconv.Atoi(k)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "%s is not a valid keycode: %s\n", k, err)
-		}
+	// kk := strings.Split(keys, "-")
+	// for i, k := range kk {
+	// 	k = formatKeycodes(strings.TrimSpace(k))
+	// 	kc, err := strconv.Atoi(k)
+	// 	if err != nil {
+	// 		fmt.Fprintf(os.Stderr, "%s is not a valid keycode: %s\n", k, err)
+	// 	}
 
-		if i+1 < len(kk) {
-			_ = keyboard.KeyDown(kc)
-			defer keyboard.KeyUp(kc) //nolint:errcheck
-		} else {
-			_ = keyboard.KeyPress(kc)
-		}
-	}
+	// 	if i+1 < len(kk) {
+	// 		_ = keyboard.KeyDown(kc)
+	// 		defer keyboard.KeyUp(kc) //nolint:errcheck
+	// 	} else {
+	// 		_ = keyboard.KeyPress(kc)
+	// 	}
+	// }
 }
 
 // emulates a clipboard paste.
@@ -176,10 +181,10 @@ func emulateClipboard(text string) {
 
 // executes a dbus method.
 func executeDBusMethod(object, path, method, args string) {
-	call := dbusConn.Object(object, dbus.ObjectPath(path)).Call(method, 0, args)
-	if call.Err != nil {
-		fmt.Fprintf(os.Stderr, "dbus call failed: %s\n", call.Err)
-	}
+	// call := dbusConn.Object(object, dbus.ObjectPath(path)).Call(method, 0, args)
+	// if call.Err != nil {
+	// 	fmt.Fprintf(os.Stderr, "dbus call failed: %s\n", call.Err)
+	// }
 }
 
 // executes a command.
@@ -206,7 +211,7 @@ func executeCommand(cmd string) {
 }
 
 // triggerAction triggers an action.
-func (d *Deck) triggerAction(dev *streamdeck.Device, index uint8, hold bool) {
+func (d *Deck) triggerAction(dev streamdeck.DeviceInterface, index uint8, hold bool) {
 	for _, w := range d.Widgets {
 		if w.Key() != index {
 			continue
@@ -236,7 +241,15 @@ func (d *Deck) triggerAction(dev *streamdeck.Device, index uint8, hold bool) {
 			}
 
 			deck = d
-			deck.updateWidgets()
+			deck.Mutex.Lock()
+			if updated := deck.updateWidgets(); updated {
+				if err := dev.Flush(); err != nil {
+					fatal(err)
+					deck.Mutex.Unlock()
+					return
+				}
+			}
+			deck.Mutex.Unlock()
 		}
 		if a.Keycode != "" {
 			emulateKeyPresses(a.Keycode)
@@ -244,9 +257,9 @@ func (d *Deck) triggerAction(dev *streamdeck.Device, index uint8, hold bool) {
 		if a.Paste != "" {
 			emulateClipboard(a.Paste)
 		}
-		if a.DBus.Method != "" {
-			executeDBusMethod(a.DBus.Object, a.DBus.Path, a.DBus.Method, a.DBus.Value)
-		}
+		// if a.DBus.Method != "" {
+		// 	executeDBusMethod(a.DBus.Object, a.DBus.Path, a.DBus.Method, a.DBus.Value)
+		// }
 		if a.Exec != "" {
 			go executeCommand(a.Exec)
 		}
@@ -268,21 +281,24 @@ func (d *Deck) triggerAction(dev *streamdeck.Device, index uint8, hold bool) {
 }
 
 // updateWidgets updates/repaints all the widgets.
-func (d *Deck) updateWidgets() {
+func (d *Deck) updateWidgets() bool {
+	updated := false
 	for _, w := range d.Widgets {
 		if !w.RequiresUpdate() {
 			continue
 		}
 
+		updated = true
 		// fmt.Println("Repaint", w.Key())
 		if err := w.Update(); err != nil {
 			fatalf("error: %v", err)
 		}
 	}
+	return updated
 }
 
 // adjustBrightness adjusts the brightness.
-func (d *Deck) adjustBrightness(dev *streamdeck.Device, value string) {
+func (d *Deck) adjustBrightness(dev streamdeck.DeviceInterface, value string) {
 	if len(value) == 0 {
 		fmt.Fprintln(os.Stderr, "No brightness value specified")
 		return
